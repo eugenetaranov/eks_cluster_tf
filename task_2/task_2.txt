@@ -1,0 +1,23 @@
+There are several possible ways to provide the secrets to running pods securely:
+
+1. AWS KMS envelope encryption https://aws.amazon.com/blogs/containers/using-eks-encryption-provider-support-for-defense-in-depth/;
++ completely transparent to the application;
++ does not break common flow, secrets are referenced as usual;
++ no additional configuration is needed;
+
+2. kubernetes-external-secrets which creates ExternalSecrets crd, pulling them from AWS Parameter Store or SecretsManager https://github.com/godaddy/kubernetes-external-secrets 
++ data is encrypted and self documented;
+- onetime configuration is needed;
+
+3. access SSM Parameter Store directly from the application via AWS api call;
++ data is encrypted and self documented;
+- might become cumbersome to manage when number of apps is growing, each app will require own IAM role;
+
+4. AWS KMS key to encrypt/decrypt secrets (with application or inside init container);
++ secret data can be stored anywhere - in the repo, in s3 bucket etc;
++ encrypted data can be dynamically provided by 3rd party (assuming cross account access to KMS key is granted);
+- operating many secrets may become difficult as they are not documented elsewhere;
+- extra configuration is required;
+
+
+Solution #1 satisifies all requirements i.e. allows to move secrets away from repository, secrets can be managed independently from the app, no extra knowledge or time is required.
