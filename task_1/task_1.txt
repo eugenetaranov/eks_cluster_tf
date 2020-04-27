@@ -1,0 +1,81 @@
+EKS installation setup procedure.
+
+Prerequisites:
+- VPC with public and private subnets across at least 2 AZ, NAT gateways in each AZ.
+- terraform, awscli installed locally
+- install kubernetes provider as documented at https://gavinbunney.github.io/terraform-provider-kubectl/docs/provider.html which allows manifests application;
+
+Features and components:
+- integration with IAM for users and services;
+- RBAC control for users (admins, dev team) allowing access to specific namespace (see environment_staging.tf as an example);
+- horizontal cluster autoscaling, cluster will grow and shrink depnding on the number of pods running;
+- dashboard;
+- cluster components logging to Cloudwatch (log group /aws/eks/<cluster name>/cluster);
+- application logging to Cloudwatch (log group /eks/<cluster name>/containers);
+- monitoring with Cloudwatch, metrics are available at Cloudwatch containers insights;
+- network policies, by default connection namespace-to-namespace and pods-to-pod connection is denied in default and staging namesapces;
+
+Steps:
+1. Create terraform.tfvars file and provide the following required variables, example is below. 
+
+# region where EKS cluster will be created
+region = "us-east-1"
+
+# VPC where working nodes will run
+vpc_id = "vpc-xxx"
+
+# private subnets where worker nodes actually run
+private_subnets = [
+  "subnet-xxx",
+  "subnet-yyy",
+  "subnet-zzz",
+]
+
+# public subnets, used by LoadBalancers/public facing services
+public_subnets = [
+  "subnet-aaa",
+  "subnet-bbb",
+  "subnet-ccc",
+]
+
+# any tags
+tags = {
+  Terraform = true
+}
+
+# EKS cluster name
+cluster_name = "eks-1"
+
+# Autoscaling and instance settings
+node_group_settings = {
+  desired_capacity = 1
+  max_capacity     = 4
+  min_capacity     = 1
+  instance_type    = "t3.small"
+  disk_size        = 20
+}
+
+# other IAM users that need admin privileges on the EKS cluster, will be added to eks-role-<cluster name>-admin-role IAM group
+admin_users = [
+  "testuseradmin",
+]
+
+# other IAM users that need only limited access to the EKS cluster resources, will be added to eks-role-<cluster name>-dev-role IAM group
+dev_users = [
+  "testuserdev",
+]
+
+4. Run terraform apply
+5. Copy kubeconfig_<cluster name> to ~/.kube/
+
+
+Creating a pod with access to S3 bucket (see testservice.tf_ as an example):
+1. Declare aws_iam_policy resource and aws_iam_policy_document data source which creates IAM policy with needed permissions, adjust actions and resources;
+2. Declare aws_s3_bucket resource.
+3. Declare a module from ../modules/service_account_iam which creates a IAM role and kubernetes service account, update service_account_name and namespace;
+4. Adjust local.testservicerole_namespace;
+4. Update output testservice_serviceaccount_name, this is a name of kubernetes service acount;
+5. Declare kubectl_manifest.testservice_iam which spins up new pod.
+6. Get pod with `kubectl get pods -l app=testservice-iam-test -n staging`
+7. Get s3 bucket name from terraform output
+8. List bucket with `kubectl exec -ti testservice-iam-test-69b5d8b464-mw657 -n staging -- aws s3 ls s3://testbucket-20200424140055534300000001/`
